@@ -117,6 +117,8 @@ function select_storage() {
   if [ -n "$PRESET_STORAGE" ]; then
     if pvesm status -content "$CONTENT" | awk 'NR>1 {print $1}' | grep -qx "$PRESET_STORAGE"; then
       STORAGE_RESULT="$PRESET_STORAGE"
+      STORAGE_INFO=$(pvesm status -content "$CONTENT" | awk -v tag="$PRESET_STORAGE" 'NR>1 && $1==tag {printf "Free: %.1fGB  Used: %.1fGB", $6/1048576, $5/1048576}')
+      [ -z "$STORAGE_INFO" ] && STORAGE_INFO="preset selection"
       msg_info "Using preset storage: $STORAGE_RESULT for $CONTENT_LABEL"
       return 0
     else
