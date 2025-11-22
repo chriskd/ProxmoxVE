@@ -15,7 +15,15 @@ variables() {
   CT_TYPE=${var_unprivileged:-$CT_TYPE}
 }
 
+DISABLE_TELEMETRY=${COMMUNITY_SCRIPTS_DISABLE_TELEMETRY:-yes}
+
+if [ "$DISABLE_TELEMETRY" = "yes" ]; then
+  post_to_api() { return 0; }
+  post_to_api_vm() { return 0; }
+  post_update_to_api() { return 0; }
+else
 source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/api.func)
+fi
 
 if command -v curl >/dev/null 2>&1; then
   source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/core.func)
@@ -24,6 +32,11 @@ elif command -v wget >/dev/null 2>&1; then
   source <(wget -qO- https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/core.func)
   load_functions
 fi
+
+NONINTERACTIVE=${COMMUNITY_SCRIPTS_NONINTERACTIVE:-no}
+NONINTERACTIVE_VERBOSE=${COMMUNITY_SCRIPTS_VERBOSE:-no}
+NONINTERACTIVE_DIAGNOSTICS=${COMMUNITY_SCRIPTS_DIAGNOSTICS:-}
+DNS_FALLBACK_DEFAULT=$(echo "${COMMUNITY_SCRIPTS_FALLBACK_DNS:-y}" | tr '[:upper:]' '[:lower:]')
 # This function enables error handling in the script by setting options and defining a trap for the ERR signal.
 catch_errors() {
   set -Eeo pipefail
@@ -32,13 +45,17 @@ catch_errors() {
 
 # This function is called when an error occurs. It receives the exit code, line number, and command that caused the error, and displays an error message.
 error_handler() {
+  if [ "$DISABLE_TELEMETRY" != "yes" ]; then
   source /dev/stdin <<<$(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/api.func)
+  fi
   printf "\e[?25h"
   local exit_code="$?"
   local line_number="$1"
   local command="$2"
   local error_message="${RD}[ERROR]${CL} in line ${RD}$line_number${CL}: exit code ${RD}$exit_code${CL}: while executing command ${YW}$command${CL}"
+  if [ "$DISABLE_TELEMETRY" != "yes" ]; then
   post_update_to_api "failed" "${command}"
+  fi
   echo -e "\n$error_message\n"
 }
 
@@ -187,6 +204,9 @@ update_motd_ip() {
 
 # This function checks if the script is running through SSH and prompts the user to confirm if they want to proceed or exit.
 ssh_check() {
+  if [ "$NONINTERACTIVE" = "yes" ]; then
+    return
+  fi
   if [ -n "${SSH_CLIENT:+x}" ]; then
     if whiptail --backtitle "Proxmox VE Helper Scripts" --defaultno --title "SSH DETECTED" --yesno "It's advisable to utilize the Proxmox shell rather than SSH, as there may be potential complications with variable retrieval. Proceed using SSH?" 10 72; then
       whiptail --backtitle "Proxmox VE Helper Scripts" --msgbox --title "Proceed using SSH" "You've chosen to proceed using SSH. If any issues arise, please run the script in the Proxmox shell before creating a repository issue." 10 72
@@ -862,6 +882,25 @@ diagnostics_check() {
     mkdir -p /usr/local/community-scripts
   fi
 
+  local diagnostics_file="/usr/local/community-scripts/diagnostics"
+
+  if [ "$NONINTERACTIVE" = "yes" ]; then
+    if [ -n "$NONINTERACTIVE_DIAGNOSTICS" ]; then
+      DIAGNOSTICS="$NONINTERACTIVE_DIAGNOSTICS"
+      cat <<EOF >"$diagnostics_file"
+DIAGNOSTICS=${DIAGNOSTICS}
+EOF
+    elif [ -f "$diagnostics_file" ]; then
+      DIAGNOSTICS=$(awk -F '=' '/^DIAGNOSTICS/ {print $2}' "$diagnostics_file")
+    else
+      DIAGNOSTICS="no"
+      cat <<EOF >"$diagnostics_file"
+DIAGNOSTICS=no
+EOF
+    fi
+    return
+  fi
+
   if ! [ -f "/usr/local/community-scripts/diagnostics" ]; then
     if (whiptail --backtitle "Proxmox VE Helper Scripts" --title "DIAGNOSTICS" --yesno "Send Diagnostics of LXC Installation?\n\n(This only transmits data without user data, just RAM, CPU, LXC name, ...)" 10 58); then
       cat <<EOF >/usr/local/community-scripts/diagnostics
@@ -931,6 +970,15 @@ install_script() {
   ssh_check
   maxkeys_check
   diagnostics_check
+
+  if [ "$NONINTERACTIVE" = "yes" ]; then
+    header_info
+    VERBOSE="$NONINTERACTIVE_VERBOSE"
+    METHOD="default"
+    base_settings "$VERBOSE"
+    echo_default
+    return
+  fi
 
   if systemctl is-active -q ping-instances.service; then
     systemctl -q stop ping-instances.service
@@ -1031,11 +1079,15 @@ check_container_resources() {
   if [[ "$current_ram" -lt "$var_ram" ]] || [[ "$current_cpu" -lt "$var_cpu" ]]; then
     echo -e "\n${INFO}${HOLD} ${GN}Required: ${var_cpu} CPU, ${var_ram}MB RAM ${CL}| ${RD}Current: ${current_cpu} CPU, ${current_ram}MB RAM${CL}"
     echo -e "${YWB}Please ensure that the ${APP} LXC is configured with at least ${var_cpu} vCPU and ${var_ram} MB RAM for the build process.${CL}\n"
+    if [ "$NONINTERACTIVE" = "yes" ]; then
+      echo -e "${INFO}${HOLD} Non-interactive mode: continuing despite under-provisioned resources.${CL}"
+    else
     echo -ne "${INFO}${HOLD} May cause data loss! ${INFO} Continue update with under-provisioned LXC? [y/N] "
     read -r prompt
     if [[ ! "${prompt,,}" =~ ^(y|yes)$ ]]; then
       echo -e "${CROSS}${HOLD} ${YWB}Exiting based on user input.${CL}"
       exit 1
+      fi
     fi
   else
     echo -e ""
@@ -1050,11 +1102,15 @@ check_container_storage() {
   if ((usage > 80)); then
     # Prompt the user for confirmation to continue
     echo -e "${INFO}${HOLD} ${YWB}Warning: Storage is dangerously low (${usage}%).${CL}"
+    if [ "$NONINTERACTIVE" = "yes" ]; then
+      echo -e "${INFO}${HOLD} Non-interactive mode: continuing despite storage warning.${CL}"
+    else
     echo -ne "Continue anyway? [y/N] "
     read -r prompt
     if [[ ! "${prompt,,}" =~ ^(y|yes)$ ]]; then
       echo -e "${CROSS}${HOLD}${YWB}Exiting based on user input.${CL}"
       exit 1
+      fi
     fi
   fi
 }
@@ -1132,6 +1188,7 @@ build_container() {
   export CACHER="$APT_CACHER"
   export CACHER_IP="$APT_CACHER_IP"
   export tz="$timezone"
+  export COMMUNITY_SCRIPTS_NONINTERACTIVE="$NONINTERACTIVE"
   export APPLICATION="$APP"
   export app="$NSAPP"
   export PASSWORD="$PW"
@@ -1214,7 +1271,11 @@ EOF
     fi
     msg_custom "ℹ️ " "\e[96m" "VAAPI enables GPU hardware acceleration (e.g., for video transcoding in Jellyfin or Plex)."
     echo ""
+    if [ "$NONINTERACTIVE" = "yes" ]; then
+      VAAPI_ALL="y"
+    else
     read -rp "➤ Automatically mount all available VAAPI devices? [Y/n]: " VAAPI_ALL
+    fi
 
     if [[ "$VAAPI_ALL" =~ ^[Yy]$|^$ ]]; then
       if [ "$CT_TYPE" == "0" ]; then
@@ -1298,7 +1359,16 @@ EOF
           msg_ok "Network in LXC is reachable (wget fallback)"
         else
           msg_error "No network in LXC after all checks."
+          if [ "$NONINTERACTIVE" = "yes" ]; then
+            choice="$DNS_FALLBACK_DEFAULT"
+          else
+            if [ -n "$DNS_FALLBACK_DEFAULT" ]; then
+              choice="$DNS_FALLBACK_DEFAULT"
+            else
           read -r -p "Set fallback DNS (1.1.1.1/8.8.8.8)? [y/N]: " choice
+            fi
+          fi
+          choice="${choice,,}"
           case "$choice" in
           [yY]*)
             pct set "$CTID" --nameserver 1.1.1.1

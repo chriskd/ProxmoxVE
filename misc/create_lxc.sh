@@ -106,14 +106,21 @@ function select_storage() {
     ;;
   esac
 
-  # Check for preset STORAGE variable
-  if [ "$CONTENT" = "rootdir" ] && [ -n "${STORAGE:-}" ]; then
-    if pvesm status -content "$CONTENT" | awk 'NR>1 {print $1}' | grep -qx "$STORAGE"; then
-      STORAGE_RESULT="$STORAGE"
+  # Non-interactive preset handling
+  local PRESET_STORAGE=""
+  if [ "$CONTENT" = "rootdir" ]; then
+    PRESET_STORAGE="${COMMUNITY_SCRIPTS_CONTAINER_STORAGE:-${STORAGE:-}}"
+  elif [ "$CONTENT" = "vztmpl" ]; then
+    PRESET_STORAGE="${COMMUNITY_SCRIPTS_TEMPLATE_STORAGE:-}"
+  fi
+
+  if [ -n "$PRESET_STORAGE" ]; then
+    if pvesm status -content "$CONTENT" | awk 'NR>1 {print $1}' | grep -qx "$PRESET_STORAGE"; then
+      STORAGE_RESULT="$PRESET_STORAGE"
       msg_info "Using preset storage: $STORAGE_RESULT for $CONTENT_LABEL"
       return 0
     else
-      msg_error "Preset storage '$STORAGE' is not valid for content type '$CONTENT'."
+      msg_error "Preset storage '$PRESET_STORAGE' is not valid for content type '$CONTENT'."
       return 2
     fi
   fi
@@ -142,6 +149,13 @@ function select_storage() {
   if [ $((${#MENU[@]} / 3)) -eq 1 ]; then
     STORAGE_RESULT="${STORAGE_MAP[${MENU[0]}]}"
     STORAGE_INFO="${MENU[1]}"
+    return 0
+  fi
+
+  if [ "${COMMUNITY_SCRIPTS_NONINTERACTIVE:-no}" = "yes" ]; then
+    STORAGE_RESULT="${STORAGE_MAP[${MENU[0]}]}"
+    STORAGE_INFO="${MENU[1]}"
+    msg_info "Auto-selected storage ${STORAGE_RESULT} for ${CONTENT_LABEL,,}"
     return 0
   fi
 
