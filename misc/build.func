@@ -40,6 +40,10 @@ if [ -n "${SCRIPT_FORK_URL:-}" ]; then
   fi
 fi
 SCRIPT_RAW_BASE="https://raw.githubusercontent.com/${SCRIPT_FORK_REPO}/${SCRIPT_FORK_BRANCH}"
+if [ "${DEBUG_SCRIPT_FORK:-no}" = "yes" ]; then
+  echo "[script-fork] SCRIPT_FORK_URL=${SCRIPT_FORK_URL:-default}" >&2
+  echo "[script-fork] SCRIPT_RAW_BASE=${SCRIPT_RAW_BASE}" >&2
+fi
 
 DISABLE_TELEMETRY=${DISABLE_TELEMETRY:-yes}
 
