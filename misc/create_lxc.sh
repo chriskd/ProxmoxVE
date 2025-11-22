@@ -109,9 +109,9 @@ function select_storage() {
   # Non-interactive preset handling
   local PRESET_STORAGE=""
   if [ "$CONTENT" = "rootdir" ]; then
-    PRESET_STORAGE="${COMMUNITY_SCRIPTS_CONTAINER_STORAGE:-${STORAGE:-}}"
+    PRESET_STORAGE="${CONTAINER_STORAGE:-${STORAGE:-}}"
   elif [ "$CONTENT" = "vztmpl" ]; then
-    PRESET_STORAGE="${COMMUNITY_SCRIPTS_TEMPLATE_STORAGE:-}"
+    PRESET_STORAGE="${TEMPLATE_STORAGE:-}"
   fi
 
   if [ -n "$PRESET_STORAGE" ]; then
@@ -152,7 +152,7 @@ function select_storage() {
     return 0
   fi
 
-  if [ "${COMMUNITY_SCRIPTS_NONINTERACTIVE:-no}" = "yes" ]; then
+  if [ "${NONINTERACTIVE:-no}" = "yes" ]; then
     STORAGE_RESULT="${STORAGE_MAP[${MENU[0]}]}"
     STORAGE_INFO="${MENU[1]}"
     msg_info "Auto-selected storage ${STORAGE_RESULT} for ${CONTENT_LABEL,,}"

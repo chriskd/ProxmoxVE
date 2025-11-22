@@ -15,7 +15,7 @@ variables() {
   CT_TYPE=${var_unprivileged:-$CT_TYPE}
 }
 
-DISABLE_TELEMETRY=${COMMUNITY_SCRIPTS_DISABLE_TELEMETRY:-yes}
+DISABLE_TELEMETRY=${DISABLE_TELEMETRY:-yes}
 
 if [ "$DISABLE_TELEMETRY" = "yes" ]; then
   post_to_api() { return 0; }
@@ -33,10 +33,10 @@ elif command -v wget >/dev/null 2>&1; then
   load_functions
 fi
 
-NONINTERACTIVE=${COMMUNITY_SCRIPTS_NONINTERACTIVE:-no}
-NONINTERACTIVE_VERBOSE=${COMMUNITY_SCRIPTS_VERBOSE:-no}
-NONINTERACTIVE_DIAGNOSTICS=${COMMUNITY_SCRIPTS_DIAGNOSTICS:-}
-DNS_FALLBACK_DEFAULT=$(echo "${COMMUNITY_SCRIPTS_FALLBACK_DNS:-y}" | tr '[:upper:]' '[:lower:]')
+NONINTERACTIVE=${NONINTERACTIVE:-no}
+NONINTERACTIVE_VERBOSE=${NONINTERACTIVE_VERBOSE:-no}
+NONINTERACTIVE_DIAGNOSTICS=${NONINTERACTIVE_DIAGNOSTICS:-}
+DNS_FALLBACK_DEFAULT=$(echo "${FALLBACK_DNS:-y}" | tr '[:upper:]' '[:lower:]')
 # This function enables error handling in the script by setting options and defining a trap for the ERR signal.
 catch_errors() {
   set -Eeo pipefail
@@ -1188,7 +1188,7 @@ build_container() {
   export CACHER="$APT_CACHER"
   export CACHER_IP="$APT_CACHER_IP"
   export tz="$timezone"
-  export COMMUNITY_SCRIPTS_NONINTERACTIVE="$NONINTERACTIVE"
+  export NONINTERACTIVE="$NONINTERACTIVE"
   export APPLICATION="$APP"
   export app="$NSAPP"
   export PASSWORD="$PW"
