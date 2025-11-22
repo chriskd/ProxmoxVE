@@ -15,6 +15,32 @@ variables() {
   CT_TYPE=${var_unprivileged:-$CT_TYPE}
 }
 
+SCRIPT_FORK_REPO="community-scripts/ProxmoxVE"
+SCRIPT_FORK_BRANCH="main"
+if [ -n "${SCRIPT_FORK_URL:-}" ]; then
+  CLEAN_URL=${SCRIPT_FORK_URL%.git}
+  if [[ "$CLEAN_URL" == https://raw.githubusercontent.com/* ]]; then
+    REST=${CLEAN_URL#https://raw.githubusercontent.com/}
+    IFS='/' read -r OWNER RAW_REPO RAW_BRANCH _ <<<"$REST"
+    if [ -n "$OWNER" ] && [ -n "$RAW_REPO" ]; then
+      SCRIPT_FORK_REPO="$OWNER/$RAW_REPO"
+    fi
+    if [ -n "$RAW_BRANCH" ]; then
+      SCRIPT_FORK_BRANCH="$RAW_BRANCH"
+    fi
+  elif [[ "$CLEAN_URL" == https://github.com/* ]]; then
+    REST=${CLEAN_URL#https://github.com/}
+    IFS='/' read -r OWNER RAW_REPO PART3 PART4 _ <<<"$REST"
+    if [ -n "$OWNER" ] && [ -n "$RAW_REPO" ]; then
+      SCRIPT_FORK_REPO="$OWNER/$RAW_REPO"
+    fi
+    if [ "$PART3" = "tree" ] && [ -n "$PART4" ]; then
+      SCRIPT_FORK_BRANCH="$PART4"
+    fi
+  fi
+fi
+SCRIPT_RAW_BASE="https://raw.githubusercontent.com/${SCRIPT_FORK_REPO}/${SCRIPT_FORK_BRANCH}"
+
 DISABLE_TELEMETRY=${DISABLE_TELEMETRY:-yes}
 
 if [ "$DISABLE_TELEMETRY" = "yes" ]; then
@@ -22,14 +48,14 @@ if [ "$DISABLE_TELEMETRY" = "yes" ]; then
   post_to_api_vm() { return 0; }
   post_update_to_api() { return 0; }
 else
-source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/api.func)
+source <(curl -fsSL ${SCRIPT_RAW_BASE}/misc/api.func)
 fi
 
 if command -v curl >/dev/null 2>&1; then
-  source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/core.func)
+  source <(curl -fsSL ${SCRIPT_RAW_BASE}/misc/core.func)
   load_functions
 elif command -v wget >/dev/null 2>&1; then
-  source <(wget -qO- https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/core.func)
+  source <(wget -qO- ${SCRIPT_RAW_BASE}/misc/core.func)
   load_functions
 fi
 
@@ -46,7 +72,7 @@ catch_errors() {
 # This function is called when an error occurs. It receives the exit code, line number, and command that caused the error, and displays an error message.
 error_handler() {
   if [ "$DISABLE_TELEMETRY" != "yes" ]; then
-  source /dev/stdin <<<$(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/api.func)
+  source /dev/stdin <<<$(curl -fsSL ${SCRIPT_RAW_BASE}/misc/api.func)
   fi
   printf "\e[?25h"
   local exit_code="$?"
@@ -1037,7 +1063,7 @@ install_script() {
       header_info
       echo -e "${INFO}${HOLD} ${GN}Using Config File on node $PVEHOST_NAME${CL}"
       METHOD="config_file"
-      source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/config-file.func)
+      source <(curl -fsSL ${SCRIPT_RAW_BASE}/misc/config-file.func)
       config_file
       break
       ;;
@@ -1116,7 +1142,7 @@ check_container_storage() {
 }
 
 start() {
-  source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/tools.func)
+  source <(curl -fsSL ${SCRIPT_RAW_BASE}/misc/tools.func)
   if command -v pveversion >/dev/null 2>&1; then
     install_script
   else
@@ -1178,9 +1204,9 @@ build_container() {
   TEMP_DIR=$(mktemp -d)
   pushd "$TEMP_DIR" >/dev/null
   if [ "$var_os" == "alpine" ]; then
-    export FUNCTIONS_FILE_PATH="$(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/alpine-install.func)"
+    export FUNCTIONS_FILE_PATH="$(curl -fsSL ${SCRIPT_RAW_BASE}/misc/alpine-install.func)"
   else
-    export FUNCTIONS_FILE_PATH="$(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/install.func)"
+    export FUNCTIONS_FILE_PATH="$(curl -fsSL ${SCRIPT_RAW_BASE}/misc/install.func)"
   fi
 
   export DIAGNOSTICS="$DIAGNOSTICS"
@@ -1216,7 +1242,7 @@ build_container() {
     $PW
   "
   # This executes create_lxc.sh and creates the container and .conf file
-  bash -c "$(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/create_lxc.sh)" $?
+  bash -c "$(curl -fsSL ${SCRIPT_RAW_BASE}/misc/create_lxc.sh)" $?
 
   LXC_CONFIG="/etc/pve/lxc/${CTID}.conf"
 
@@ -1422,7 +1448,7 @@ EOF'
   fi
   msg_ok "Customized LXC Container"
 
-  lxc-attach -n "$CTID" -- bash -c "$(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/install/${var_install}.sh)"
+  lxc-attach -n "$CTID" -- bash -c "$(curl -fsSL ${SCRIPT_RAW_BASE}/install/${var_install}.sh)"
 }
 
 # This function sets the description of the container.
