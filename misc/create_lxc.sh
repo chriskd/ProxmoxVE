@@ -337,6 +337,9 @@ grep -q "root:100000:65536" /etc/subgid || echo "root:100000:65536" >>/etc/subgi
 # Combine all options
 PCT_OPTIONS=(${PCT_OPTIONS[@]:-${DEFAULT_PCT_OPTIONS[@]}})
 [[ " ${PCT_OPTIONS[@]} " =~ " -rootfs " ]] || PCT_OPTIONS+=(-rootfs "$CONTAINER_STORAGE:${PCT_DISK_SIZE:-8}")
+if [ "${VERBOSE:-no}" = "yes" ]; then
+  msg_info "pct create $CTID ${TEMPLATE_STORAGE}:vztmpl/${TEMPLATE} ${PCT_OPTIONS[*]}"
+fi
 
 # Secure creation of the LXC container with lock and template check
 lockfile="/tmp/template.${TEMPLATE}.lock"
@@ -349,7 +352,8 @@ flock -w 60 9 || {
   exit 211
 }
 
-if ! pct create "$CTID" "${TEMPLATE_STORAGE}:vztmpl/${TEMPLATE}" "${PCT_OPTIONS[@]}"; then
+if ! pct_output=$(pct create "$CTID" "${TEMPLATE_STORAGE}:vztmpl/${TEMPLATE}" "${PCT_OPTIONS[@]}" 2>&1); then
+  printf "%s\n" "$pct_output"
   msg_error "Container creation failed. Checking if template is corrupted or incomplete."
 
   if [[ ! -s "$TEMPLATE_PATH" || "$(stat -c%s "$TEMPLATE_PATH")" -lt 1000000 ]]; then
