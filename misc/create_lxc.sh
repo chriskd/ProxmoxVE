@@ -346,9 +346,7 @@ if [ "${#PCT_OPTIONS[@]}" -gt 0 ]; then
   PCT_OPTIONS=("${CLEAN_PCT_OPTIONS[@]}")
 fi
 [[ " ${PCT_OPTIONS[@]} " =~ " -rootfs " ]] || PCT_OPTIONS+=(-rootfs "$CONTAINER_STORAGE:${PCT_DISK_SIZE:-8}")
-if [ "${VERBOSE:-no}" = "yes" ]; then
-  msg_info "pct create $CTID ${TEMPLATE_STORAGE}:vztmpl/${TEMPLATE} ${PCT_OPTIONS[*]}"
-fi
+msg_info "pct create $CTID ${TEMPLATE_STORAGE}:vztmpl/${TEMPLATE} ${PCT_OPTIONS[*]}"
 
 # Secure creation of the LXC container with lock and template check
 lockfile="/tmp/template.${TEMPLATE}.lock"
