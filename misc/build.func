@@ -234,10 +234,11 @@ update_motd_ip() {
 
 # This function checks if the script is running through SSH and prompts the user to confirm if they want to proceed or exit.
 ssh_check() {
-  if [ "$NONINTERACTIVE" = "yes" ]; then
-    return
-  fi
   if [ -n "${SSH_CLIENT:+x}" ]; then
+    if [ "$NONINTERACTIVE" = "yes" ]; then
+      msg_info "SSH detected, continuing in NONINTERACTIVE mode."
+      return
+    fi
     if whiptail --backtitle "Proxmox VE Helper Scripts" --defaultno --title "SSH DETECTED" --yesno "It's advisable to utilize the Proxmox shell rather than SSH, as there may be potential complications with variable retrieval. Proceed using SSH?" 10 72; then
       whiptail --backtitle "Proxmox VE Helper Scripts" --msgbox --title "Proceed using SSH" "You've chosen to proceed using SSH. If any issues arise, please run the script in the Proxmox shell before creating a repository issue." 10 72
     else
@@ -289,6 +290,41 @@ base_settings() {
 write_config() {
   mkdir -p /opt/community-scripts
   # This function writes the configuration to a file.
+  if [ "$NONINTERACTIVE" = "yes" ]; then
+    if [ -n "$CONFIG_FILE" ]; then
+      echo -e "${INFO}${BOLD}${GN}Writing configuration to ${CONFIG_FILE}${CL}"
+      cat <<EOF >"$CONFIG_FILE"
+# ${NSAPP} Configuration File
+# Generated on $(date)
+
+CT_TYPE="${CT_TYPE}"
+DISK_SIZE="${DISK_SIZE}"
+CORE_COUNT="${CORE_COUNT}"
+RAM_SIZE="${RAM_SIZE}"
+VERBOSE="${VERBOSE}"
+PW="${PW##-password }"
+#CT_ID=$NEXTID
+HN="${HN}"
+BRG="${BRG}"
+NET="${NET}"
+IPV6_METHOD="${IPV6_METHOD:-none}"
+GATE="${GATE:-none}"
+APT_CACHER_IP="${APT_CACHER_IP:-none}"
+MTU="${MTU:-1500}"
+SD="${SD}"
+NS="${NS}"
+MAC="${MAC}"
+VLAN="${VLAN}"
+SSH="${SSH}"
+SSH_AUTHORIZED_KEY="${SSH_AUTHORIZED_KEY}"
+TAGS="${TAGS:-none}"
+ENABLE_FUSE="$ENABLE_FUSE"
+ENABLE_TUN="$ENABLE_TUN"
+EOF
+    fi
+    return
+  fi
+
   if whiptail --backtitle "Proxmox VE Helper Scripts" --defaultno --title "Write configfile" --yesno "Do you want to write the selections to a config file?" 10 60; then
     FILEPATH="/opt/community-scripts/${NSAPP}.conf"
     [[ "$GATE" =~ ",gw=" ]] && local GATE="${GATE##,gw=}"
@@ -412,6 +448,22 @@ exit_script() {
 
 # This function allows the user to configure advanced settings for the script.
 advanced_settings() {
+  if [ "$NONINTERACTIVE" = "yes" ]; then
+    msg_info "Skipping advanced settings (NONINTERACTIVE mode)."
+    CT_TYPE=${CT_TYPE:-${var_unprivileged:-1}}
+    DISK_SIZE=${DISK_SIZE:-${var_disk:-4}}
+    CORE_COUNT=${CORE_COUNT:-${var_cpu:-1}}
+    RAM_SIZE=${RAM_SIZE:-${var_ram:-1024}}
+    BRG=${BRG:-${var_brg:-vmbr0}}
+    NET=${var_net:-$NET}
+    GATE=${var_gateway:-$GATE}
+    NS=${var_ns:-$NS}
+    VLAN=${var_vlan:-$VLAN}
+    SSH=${var_ssh:-$SSH}
+    SSH_AUTHORIZED_KEY=${var_ssh_authorized_key:-$SSH_AUTHORIZED_KEY}
+    return
+  fi
+
   whiptail --backtitle "Proxmox VE Helper Scripts" --msgbox --title "Here is an instructional tip:" "To make a selection, use the Spacebar." 8 58
   # Setting Default Tag for Advanced Settings
   TAGS="community-script;${var_tags:-}"
@@ -1150,6 +1202,13 @@ start() {
   if command -v pveversion >/dev/null 2>&1; then
     install_script
   else
+    if [ "$NONINTERACTIVE" = "yes" ]; then
+      VERBOSE="${NONINTERACTIVE_VERBOSE:-no}"
+      set_std_mode
+      update_script
+      cleanup_lxc
+      return
+    fi
     CHOICE=$(whiptail --backtitle "Proxmox VE Helper Scripts" --title "${APP} LXC Update/Setting" --menu \
       "Support/Update functions for ${APP} LXC. Choose an option:" \
       12 60 3 \

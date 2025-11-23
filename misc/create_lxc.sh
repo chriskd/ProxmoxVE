@@ -336,6 +336,15 @@ grep -q "root:100000:65536" /etc/subgid || echo "root:100000:65536" >>/etc/subgi
 
 # Combine all options
 PCT_OPTIONS=(${PCT_OPTIONS[@]:-${DEFAULT_PCT_OPTIONS[@]}})
+# Remove empty entries (can happen when env vars such as $PW are blank)
+if [ "${#PCT_OPTIONS[@]}" -gt 0 ]; then
+  CLEAN_PCT_OPTIONS=()
+  for opt in "${PCT_OPTIONS[@]}"; do
+    [[ -z "$opt" ]] && continue
+    CLEAN_PCT_OPTIONS+=("$opt")
+  done
+  PCT_OPTIONS=("${CLEAN_PCT_OPTIONS[@]}")
+fi
 [[ " ${PCT_OPTIONS[@]} " =~ " -rootfs " ]] || PCT_OPTIONS+=(-rootfs "$CONTAINER_STORAGE:${PCT_DISK_SIZE:-8}")
 if [ "${VERBOSE:-no}" = "yes" ]; then
   msg_info "pct create $CTID ${TEMPLATE_STORAGE}:vztmpl/${TEMPLATE} ${PCT_OPTIONS[*]}"
